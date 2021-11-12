@@ -35,6 +35,10 @@ func main() {
 		defer outputFile.Close()
 	}
 
+	if defaultResponseText == "" {
+		defaultResponseText = readDefaultResponseText()
+	}
+
 	http.HandleFunc("/", defaultHandler)
 
 	port := strconv.Itoa(defaultPort)
@@ -113,4 +117,12 @@ func bodyToString(r *http.Request, sep string) string {
 	r.Body = io.NopCloser(bytes.NewBuffer(b))
 
 	return string(b)
+}
+
+func readDefaultResponseText() string {
+	body, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(body)
 }
