@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mattn/go-isatty"
 )
 
 var (
@@ -132,9 +134,13 @@ func readDefaultResponseText() string {
 		return string(fbytes)
 	}
 
-	body, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		log.Fatal(err)
+	if !isatty.IsTerminal(os.Stdin.Fd()) {
+		body, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return string(body)
 	}
-	return string(body)
+
+	return ""
 }
