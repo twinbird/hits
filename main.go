@@ -20,7 +20,7 @@ var outputFilePath string
 var outputFile *os.File
 
 func main() {
-	flag.IntVar(&defaultPort, "p", 80, "listen port")
+	flag.IntVar(&defaultPort, "p", 8080, "listen port")
 	flag.IntVar(&defaultResponseStatus, "s", 200, "response status")
 	flag.StringVar(&defaultResponseText, "r", "", "response text")
 	flag.StringVar(&outputFilePath, "o", "", "output file path")
@@ -38,6 +38,8 @@ func main() {
 	http.HandleFunc("/", defaultHandler)
 
 	port := strconv.Itoa(defaultPort)
+
+	log.Printf("listening on port %s\n", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
