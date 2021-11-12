@@ -13,9 +13,11 @@ import (
 )
 
 var defaultPort int
+var defaultResponseStatus int
 
 func main() {
 	flag.IntVar(&defaultPort, "p", 80, "listen port")
+	flag.IntVar(&defaultResponseStatus, "s", 200, "response status")
 	flag.Parse()
 
 	http.HandleFunc("/", defaultHandler)
@@ -26,6 +28,8 @@ func main() {
 
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	t := time.Now()
+
+	w.WriteHeader(defaultResponseStatus)
 	s := requestPrint(t, r)
 	fmt.Fprint(w, s)
 	fmt.Println(s)
