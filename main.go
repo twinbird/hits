@@ -2,17 +2,26 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
 
+var defaultPort int
+
 func main() {
+	flag.IntVar(&defaultPort, "p", 80, "listen port")
+	flag.Parse()
+
 	http.HandleFunc("/", defaultHandler)
-	http.ListenAndServe(":8080", nil)
+
+	port := strconv.Itoa(defaultPort)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
