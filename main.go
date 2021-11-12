@@ -13,17 +13,21 @@ import (
 	"time"
 )
 
-var defaultPort int
-var defaultResponseStatus int
-var defaultResponseText string
-var outputFilePath string
-var outputFile *os.File
+var (
+	defaultPort           int
+	defaultResponseStatus int
+	defaultResponseText   string
+	outputFilePath        string
+	outputFile            *os.File
+	responseFilePath      string
+)
 
 func main() {
 	flag.IntVar(&defaultPort, "p", 8080, "listen port")
 	flag.IntVar(&defaultResponseStatus, "s", 200, "response status")
 	flag.StringVar(&defaultResponseText, "r", "", "response text")
-	flag.StringVar(&outputFilePath, "o", "", "output file path")
+	flag.StringVar(&outputFilePath, "o", "", "log output file path")
+	flag.StringVar(&responseFilePath, "f", "", "response contents file path")
 	flag.Parse()
 
 	if outputFilePath != "" {
@@ -120,6 +124,14 @@ func bodyToString(r *http.Request, sep string) string {
 }
 
 func readDefaultResponseText() string {
+	if responseFilePath != "" {
+		fbytes, err := os.ReadFile(responseFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return string(fbytes)
+	}
+
 	body, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		log.Fatal(err)
