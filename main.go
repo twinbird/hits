@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,12 +16,24 @@ import (
 var defaultPort int
 var defaultResponseStatus int
 var defaultResponseText string
+var outputFilePath string
+var outputFile *os.File
 
 func main() {
 	flag.IntVar(&defaultPort, "p", 80, "listen port")
 	flag.IntVar(&defaultResponseStatus, "s", 200, "response status")
 	flag.StringVar(&defaultResponseText, "r", "", "response text")
+	flag.StringVar(&outputFilePath, "o", "", "output file path")
 	flag.Parse()
+
+	if outputFilePath != "" {
+		f, err := os.OpenFile(outputFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
+		outputFile = f
+		defer outputFile.Close()
+	}
 
 	http.HandleFunc("/", defaultHandler)
 
@@ -40,7 +53,11 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, s)
 	}
 
-	fmt.Println(s)
+	if outputFile != nil {
+		outputFile.WriteString(s)
+	} else {
+		fmt.Println(s)
+	}
 }
 
 func requestPrint(t time.Time, r *http.Request) string {
