@@ -25,6 +25,7 @@ var (
 	setContentTypeToJson  bool
 	basicAuthUser         string
 	basicAuthPassword     string
+	documentServeDir      string
 )
 
 func main() {
@@ -36,6 +37,7 @@ func main() {
 	flag.BoolVar(&setContentTypeToJson, "j", false, "set content type to json(application/json; charset=utf-8)")
 	flag.StringVar(&basicAuthUser, "u", "", "basic authentication user name")
 	flag.StringVar(&basicAuthPassword, "P", "", "basic authentication password")
+	flag.StringVar(&documentServeDir, "d", "", "documents serve directory path")
 	flag.Parse()
 
 	if outputFilePath != "" {
@@ -51,7 +53,11 @@ func main() {
 		defaultResponseText = readDefaultResponseText()
 	}
 
-	http.HandleFunc("/", defaultHandler)
+	if documentServeDir != "" {
+		http.Handle("/", http.FileServer(http.Dir(documentServeDir)))
+	} else {
+		http.HandleFunc("/", defaultHandler)
+	}
 
 	port := strconv.Itoa(defaultPort)
 
