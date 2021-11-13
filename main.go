@@ -23,6 +23,8 @@ var (
 	outputFile            *os.File
 	responseFilePath      string
 	setContentTypeToJson  bool
+	basicAuthUser         string
+	basicAuthPassword     string
 )
 
 func main() {
@@ -32,6 +34,8 @@ func main() {
 	flag.StringVar(&outputFilePath, "o", "", "log output file path")
 	flag.StringVar(&responseFilePath, "f", "", "response contents file path")
 	flag.BoolVar(&setContentTypeToJson, "j", false, "set content type to json(application/json; charset=utf-8)")
+	flag.StringVar(&basicAuthUser, "u", "", "basic authentication user name")
+	flag.StringVar(&basicAuthPassword, "P", "", "basic authentication password")
 	flag.Parse()
 
 	if outputFilePath != "" {
@@ -56,14 +60,18 @@ func main() {
 }
 
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
-	t := time.Now()
+	if basicAuthUser != "" {
+		if doBasicAuth(w, r) == false {
+			return
+		}
+	}
 
 	if setContentTypeToJson {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	}
 	w.WriteHeader(defaultResponseStatus)
 
-	s := buildLogString(t, r)
+	s := buildLogString(r)
 
 	if defaultResponseText != "" {
 		fmt.Fprint(w, defaultResponseText)
@@ -71,17 +79,23 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, s)
 	}
 
+	logging(s)
+}
+
+func logging(s string) {
+	t := time.Now()
+	const log_time_format = "2006/01/02 15:04:05"
+	ts := fmt.Sprintf("Time:\n\t%s\n", t.Format(log_time_format))
+
 	if outputFile != nil {
-		outputFile.WriteString(s)
+		outputFile.WriteString(ts + s)
 	} else {
-		fmt.Println(s)
+		fmt.Println(ts + s)
 	}
 }
 
-func buildLogString(t time.Time, r *http.Request) string {
-	const log_time_format = "2006/01/02 15:04:05"
-
-	s := fmt.Sprintf("Time:\n\t%s\n", t.Format(log_time_format))
+func buildLogString(r *http.Request) string {
+	var s string
 	s += fmt.Sprintf("URL:\n\t%s\n", r.URL)
 	s += fmt.Sprintf("Method:\n\t%s\n", r.Method)
 	s += fmt.Sprintf("Protocol:\n\t%s\n", r.Proto)
@@ -149,4 +163,15 @@ func readDefaultResponseText() string {
 	}
 
 	return ""
+}
+
+func doBasicAuth(w http.ResponseWriter, r *http.Request) bool {
+	if user, pass, ok := r.BasicAuth(); !ok || user != basicAuthUser || pass != basicAuthPassword {
+		logging(fmt.Sprintf("Basic auth not authorized.\n\taccepted user: %s\n\taccepted password: %s\n", user, pass))
+
+		w.Header().Add("WWW-Authenticate", `Basic realm="secret area"`)
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
+		return false
+	}
+	return true
 }
