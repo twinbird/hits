@@ -22,6 +22,7 @@ var (
 	outputFilePath        string
 	outputFile            *os.File
 	responseFilePath      string
+	setContentTypeToJson  bool
 )
 
 func main() {
@@ -30,6 +31,7 @@ func main() {
 	flag.StringVar(&defaultResponseText, "r", "", "response text")
 	flag.StringVar(&outputFilePath, "o", "", "log output file path")
 	flag.StringVar(&responseFilePath, "f", "", "response contents file path")
+	flag.BoolVar(&setContentTypeToJson, "j", false, "set content type to json(application/json; charset=utf-8)")
 	flag.Parse()
 
 	if outputFilePath != "" {
@@ -56,8 +58,12 @@ func main() {
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	t := time.Now()
 
+	if setContentTypeToJson {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	}
 	w.WriteHeader(defaultResponseStatus)
-	s := requestPrint(t, r)
+
+	s := buildLogString(t, r)
 
 	if defaultResponseText != "" {
 		fmt.Fprint(w, defaultResponseText)
@@ -72,7 +78,7 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func requestPrint(t time.Time, r *http.Request) string {
+func buildLogString(t time.Time, r *http.Request) string {
 	const log_time_format = "2006/01/02 15:04:05"
 
 	s := fmt.Sprintf("Time:\n\t%s\n", t.Format(log_time_format))
