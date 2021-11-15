@@ -54,9 +54,11 @@ func main() {
 	}
 
 	if documentServeDir != "" {
-		http.Handle("/", http.FileServer(http.Dir(documentServeDir)))
+		http.HandleFunc("/", wrapBasicAuth(func(w http.ResponseWriter, r *http.Request) {
+			http.FileServer(http.Dir(documentServeDir)).ServeHTTP(w, r)
+		}))
 	} else {
-		http.HandleFunc("/", defaultHandler)
+		http.HandleFunc("/", wrapBasicAuth(defaultHandler))
 	}
 
 	port := strconv.Itoa(defaultPort)
@@ -66,12 +68,6 @@ func main() {
 }
 
 func defaultHandler(w http.ResponseWriter, r *http.Request) {
-	if basicAuthUser != "" {
-		if doBasicAuth(w, r) == false {
-			return
-		}
-	}
-
 	if setContentTypeToJson {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	}
@@ -171,13 +167,18 @@ func readDefaultResponseText() string {
 	return ""
 }
 
-func doBasicAuth(w http.ResponseWriter, r *http.Request) bool {
-	if user, pass, ok := r.BasicAuth(); !ok || user != basicAuthUser || pass != basicAuthPassword {
-		logging(fmt.Sprintf("Basic auth not authorized.\n\taccepted user: %s\n\taccepted password: %s\n", user, pass))
+func wrapBasicAuth(hf http.HandlerFunc) http.HandlerFunc {
+	if basicAuthUser != "" {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if user, pass, ok := r.BasicAuth(); !ok || user != basicAuthUser || pass != basicAuthPassword {
+				logging(fmt.Sprintf("Basic auth not authorized.\n\taccepted user: %s\n\taccepted password: %s\n", user, pass))
 
-		w.Header().Add("WWW-Authenticate", `Basic realm="secret area"`)
-		http.Error(w, "Not authorized", http.StatusUnauthorized)
-		return false
+				w.Header().Add("WWW-Authenticate", `Basic realm="secret area"`)
+				http.Error(w, "Not authorized", http.StatusUnauthorized)
+			} else {
+				hf(w, r)
+			}
+		}
 	}
-	return true
+	return hf
 }
