@@ -18,7 +18,7 @@ import (
 var (
 	defaultPort           int
 	defaultResponseStatus int
-	defaultResponseText   string
+	customResponseText    string
 	outputFilePath        string
 	outputFile            *os.File
 	responseFilePath      string
@@ -26,18 +26,20 @@ var (
 	basicAuthUser         string
 	basicAuthPassword     string
 	documentServeDir      string
+	customResponseHeaders responseHeaders
 )
 
 func main() {
 	flag.IntVar(&defaultPort, "p", 8080, "listen port")
 	flag.IntVar(&defaultResponseStatus, "s", 200, "response status")
-	flag.StringVar(&defaultResponseText, "r", "", "response text")
+	flag.StringVar(&customResponseText, "r", "", "response text")
 	flag.StringVar(&outputFilePath, "o", "", "log output file path")
 	flag.StringVar(&responseFilePath, "f", "", "response contents file path")
 	flag.BoolVar(&setContentTypeToJson, "j", false, "set content type to json(application/json; charset=utf-8)")
 	flag.StringVar(&basicAuthUser, "u", "", "basic authentication user name")
 	flag.StringVar(&basicAuthPassword, "P", "", "basic authentication password")
 	flag.StringVar(&documentServeDir, "d", "", "documents serve directory path")
+	flag.Var(&customResponseHeaders, "H", "response header")
 	flag.Parse()
 
 	if outputFilePath != "" {
@@ -49,8 +51,8 @@ func main() {
 		defer outputFile.Close()
 	}
 
-	if defaultResponseText == "" {
-		defaultResponseText = readDefaultResponseText()
+	if customResponseText == "" {
+		customResponseText = readDefaultResponseText()
 	}
 
 	if documentServeDir != "" {
@@ -71,12 +73,15 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	if setContentTypeToJson {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	}
+	for _, h := range customResponseHeaders {
+		w.Header().Set(h.Field, h.Value)
+	}
 	w.WriteHeader(defaultResponseStatus)
 
 	s := buildLogString(r)
 
-	if defaultResponseText != "" {
-		fmt.Fprint(w, defaultResponseText)
+	if customResponseText != "" {
+		fmt.Fprint(w, customResponseText)
 	} else {
 		fmt.Fprint(w, s)
 	}
