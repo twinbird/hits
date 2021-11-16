@@ -1,32 +1,25 @@
-# workflow name
-name: Generate release-artifacts
+name: build
 
-# on events
 on:
   push:
     tags:
-      - 'v*'
-
-# workflow tasks
+      - v*
 jobs:
-  generate:
-    name: Generate cross-platform builds
+  goreleaser:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the repository
+      - name: Checkout
         uses: actions/checkout@v2
-
-      - name: Generate build files
-        uses: thatisuday/go-cross-build@v1
         with:
-            platforms: 'linux/amd64, darwin/amd64, windows/amd64'
-            name: 'hits'
-            compress: 'false'
-            dest: 'dist'
-
-      - name: Upload build-artifacts
-        uses: skx/github-action-publish-binaries@master
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          version: latest
+          args: release --rm-dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: "./dist/*"
