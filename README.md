@@ -24,10 +24,10 @@ Now you can check the communication of the API.
 
 ```
 curl -X POST \
-     -d "key=your key"
-	 -d "secret=your secret"
-	 -d "param="parameter"
-	 http://localhost:8080/your-nice-api/v1/post
+	-d "key=your key" \
+	-d "secret=your secret" \
+	-d "param="parameter" \
+	http://localhost:8080/your-nice-api/v1/post
 ```
 
 The log will be displayed as below.
