@@ -16,20 +16,29 @@ import (
 )
 
 var (
-	defaultPort           int
-	defaultResponseStatus int
-	customResponseText    string
-	outputFilePath        string
-	outputFile            *os.File
-	responseFilePath      string
-	setContentTypeToJson  bool
-	basicAuthUser         string
-	basicAuthPassword     string
-	documentServeDir      string
-	customResponseHeaders responseHeaders
+	defaultPort            int
+	defaultResponseStatus  int
+	customResponseText     string
+	outputFilePath         string
+	outputFile             *os.File
+	responseFilePath       string
+	setContentTypeToJson   bool
+	basicAuthUser          string
+	basicAuthPassword      string
+	documentServeDir       string
+	customResponseHeaders  responseHeaders
+	outputTemplateFilePath string
+	routingSetting         *Setting
 )
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage:
+  %s [OPTIONS] [ROUTING FILES]...
+Options`+"\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
 	flag.IntVar(&defaultPort, "p", 8080, "listen port")
 	flag.IntVar(&defaultResponseStatus, "s", 200, "response status")
 	flag.StringVar(&customResponseText, "r", "", "response text")
@@ -39,8 +48,22 @@ func main() {
 	flag.StringVar(&basicAuthUser, "u", "", "basic authentication user name")
 	flag.StringVar(&basicAuthPassword, "P", "", "basic authentication password")
 	flag.StringVar(&documentServeDir, "d", "", "documents serve directory path")
-	flag.Var(&customResponseHeaders, "H", "response header")
+	flag.Var(&customResponseHeaders, "H", "response header(ex: 'Content-Type: text/csv')")
+	flag.StringVar(&outputTemplateFilePath, "g", "", "generate a routing file template to the specified path(ex: -g routing.json)")
 	flag.Parse()
+
+	if outputTemplateFilePath != "" {
+		if err := genSettingTemplate(outputTemplateFilePath); err != nil {
+			log.Fatal(err)
+		}
+		os.Exit(0)
+	}
+
+	if setting, err := loadSettings(flag.Args()); err != nil {
+		log.Fatal(err)
+	} else {
+		routingSetting = setting
+	}
 
 	if outputFilePath != "" {
 		f, err := os.OpenFile(outputFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -56,11 +79,15 @@ func main() {
 	}
 
 	if documentServeDir != "" {
-		http.HandleFunc("/", wrapBasicAuth(func(w http.ResponseWriter, r *http.Request) {
+		http.HandleFunc("/", wrapBasicAuth(basicAuthUser, basicAuthPassword, func(w http.ResponseWriter, r *http.Request) {
 			http.FileServer(http.Dir(documentServeDir)).ServeHTTP(w, r)
 		}))
 	} else {
-		http.HandleFunc("/", wrapBasicAuth(defaultHandler))
+		http.HandleFunc("/", wrapBasicAuth(basicAuthUser, basicAuthPassword, defaultHandler))
+	}
+
+	if err := setHandlersFromSetting(); err != nil {
+		log.Fatal(err)
 	}
 
 	port := strconv.Itoa(defaultPort)
@@ -172,11 +199,11 @@ func readDefaultResponseText() string {
 	return ""
 }
 
-func wrapBasicAuth(hf http.HandlerFunc) http.HandlerFunc {
+func wrapBasicAuth(user string, pass string, hf http.HandlerFunc) http.HandlerFunc {
 	if basicAuthUser != "" {
 		return func(w http.ResponseWriter, r *http.Request) {
-			if user, pass, ok := r.BasicAuth(); !ok || user != basicAuthUser || pass != basicAuthPassword {
-				logging(fmt.Sprintf("Basic auth not authorized.\n\taccepted user: %s\n\taccepted password: %s\n", user, pass))
+			if u, p, ok := r.BasicAuth(); !ok || u != user || p != pass {
+				logging(fmt.Sprintf("Basic auth not authorized.\n\taccepted user: %s\n\taccepted password: %s\n", u, p))
 
 				w.Header().Add("WWW-Authenticate", `Basic realm="secret area"`)
 				http.Error(w, "Not authorized", http.StatusUnauthorized)
@@ -186,4 +213,94 @@ func wrapBasicAuth(hf http.HandlerFunc) http.HandlerFunc {
 		}
 	}
 	return hf
+}
+
+func setHandlersFromSetting() error {
+	if routingSetting == nil {
+		return nil
+	}
+
+	for _, route := range routingSetting.Routes {
+		if err := setHandlerFromRoute(&route); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func headerFromRoute(route *Route) (map[string]string, error) {
+	m := make(map[string]string)
+
+	if route.Headers != nil {
+		for _, h := range route.Headers {
+			f, v, err := parseResponseHeader(h)
+			if err != nil {
+				return nil, err
+			}
+			m[f] = v
+		}
+	}
+	return m, nil
+}
+
+func setHandlerFromRoute(route *Route) error {
+	headers, err := headerFromRoute(route)
+	if err != nil {
+		return err
+	}
+
+	response, err := responseTextFromRoute(route)
+	if err != nil {
+		return err
+	}
+
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		for f, v := range headers {
+			w.Header().Set(f, v)
+		}
+		w.WriteHeader(route.Status)
+
+		s := buildLogString(r)
+
+		if response == "" {
+			fmt.Fprint(w, s)
+		} else {
+			fmt.Fprint(w, response)
+		}
+
+		logging(s)
+	}
+
+	if route.ServeDirPath != "" {
+		if !strings.HasSuffix(route.Path, "/") {
+			route.Path += "/"
+		}
+		fn = func(w http.ResponseWriter, r *http.Request) {
+			http.StripPrefix(route.Path, http.FileServer(http.Dir(route.ServeDirPath))).ServeHTTP(w, r)
+		}
+	}
+
+	if route.BasicAuthUser != "" {
+		http.HandleFunc(route.Path, wrapBasicAuth(route.BasicAuthUser, route.BasicAuthPassword, fn))
+	} else {
+		http.HandleFunc(route.Path, fn)
+	}
+
+	return nil
+}
+
+func responseTextFromRoute(route *Route) (string, error) {
+	if route.BodyFilePath != "" {
+		b, err := os.ReadFile(route.BodyFilePath)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
+
+	if route.BodyString != "" {
+		return route.BodyString, nil
+	}
+
+	return "", nil
 }
